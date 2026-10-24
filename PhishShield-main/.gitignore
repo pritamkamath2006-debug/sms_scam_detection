@@ -1,0 +1,25 @@
+# Python environment
+venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Test and lint caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor settings
+.vscode/
+.idea/
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Trained model artifacts (generated, not committed)
+scamguard/artifacts/*.joblib
+scamguard/artifacts/*.pkl

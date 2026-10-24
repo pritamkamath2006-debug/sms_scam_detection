@@ -1,0 +1,89 @@
+{
+    "best_model": "Linear SVM",
+    "best_f1_score": 0.9333333333333333,
+    "dataset": {
+        "file": "D:\\Ai based OTP scam detection\\dataset\\sms_scam_cleaned.csv",
+        "total_rows": 5158,
+        "training_rows": 4126,
+        "testing_rows": 1032
+    },
+    "label_mapping": {
+        "HAM": 0,
+        "SPAM": 1
+    },
+    "tfidf": {
+        "ngram_range": [
+            1,
+            2
+        ],
+        "max_features": 15000,
+        "sublinear_tf": true
+    },
+    "random_state": 42,
+    "models": {
+        "Naive Bayes": {
+            "accuracy": 0.9554263565891473,
+            "precision": 1.0,
+            "recall": 0.640625,
+            "f1_score": 0.780952380952381,
+            "confusion_matrix": [
+                [
+                    904,
+                    0
+                ],
+                [
+                    46,
+                    82
+                ]
+            ]
+        },
+        "Logistic Regression": {
+            "accuracy": 0.9777131782945736,
+            "precision": 0.8832116788321168,
+            "recall": 0.9453125,
+            "f1_score": 0.9132075471698113,
+            "confusion_matrix": [
+                [
+                    888,
+                    16
+                ],
+                [
+                    7,
+                    121
+                ]
+            ]
+        },
+        "Linear SVM": {
+            "accuracy": 0.9835271317829457,
+            "precision": 0.937007874015748,
+            "recall": 0.9296875,
+            "f1_score": 0.9333333333333333,
+            "confusion_matrix": [
+                [
+                    896,
+                    8
+                ],
+                [
+                    9,
+                    119
+                ]
+            ]
+        },
+        "Random Forest": {
+            "accuracy": 0.9699612403100775,
+            "precision": 1.0,
+            "recall": 0.7578125,
+            "f1_score": 0.8622222222222222,
+            "confusion_matrix": [
+                [
+                    904,
+                    0
+                ],
+                [
+                    31,
+                    97
+                ]
+            ]
+        }
+    }
+}
