@@ -1,1171 +1,285 @@
-import re
+"""
+frontend.py
+===========
+Interactive Streamlit Web Application for 3-Class SMS Scam Detection.
+Features:
+  - 3-Class ML Prediction (SCAM, GENUINE, NON-SCAM SPAM)
+  - Confidence percentage (calibrated)
+  - Concrete Threat Indicators Breakdown
+  - Transparent Risk Meter (0 to 100)
+  - Actionable Cybersecurity Safety Guidance
+  - Quick-Test Sample Presets
+  - Robust Input Validation & Error Handling
+"""
+
+import os
+import sys
 from pathlib import Path
-
-import joblib
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
-
-# ============================================================
-# PROJECT PATHS
-# ============================================================
-
+# Allow importing scamguard
 BASE_DIR = Path(__file__).resolve().parent
-PROJECT_DIR = BASE_DIR.parent
+REPO_ROOT = BASE_DIR.parent
 
-DATASET_FILE = PROJECT_DIR / "dataset" / "sms_scam_cleaned.csv"
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
 
-ARTIFACT_DIR = BASE_DIR / "scamguard" / "artifacts"
-
-MODEL_FILE = ARTIFACT_DIR / "best_model.joblib"
-VECTORIZER_FILE = ARTIFACT_DIR / "tfidf_vectorizer.joblib"
-
+from scamguard.predictor import ScamGuard, ScamGuardOutput
+from scamguard.config import CLASSES, CLASS_COLORS, CLASS_DESCRIPTIONS
 
 # ============================================================
 # PAGE CONFIGURATION
 # ============================================================
 
 st.set_page_config(
-    page_title="SMS Scam Detection",
+    page_title="SMS Scam Detection AI",
     page_icon="🛡️",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="expanded"
 )
 
-
 # ============================================================
-# CUSTOM CSS
+# CUSTOM STYLING (CSS)
 # ============================================================
 
 st.markdown(
     """
     <style>
-
     .main-title {
-        font-size: 38px;
-        font-weight: 700;
-        margin-bottom: 5px;
+        font-size: 36px;
+        font-weight: 800;
+        color: #1e293b;
+        margin-bottom: 4px;
     }
-
     .subtitle {
-        font-size: 17px;
-        color: #666;
-        margin-bottom: 25px;
+        font-size: 16px;
+        color: #64748b;
+        margin-bottom: 24px;
     }
-
-    .result-box {
-        padding: 25px;
-        border-radius: 15px;
-        margin-top: 20px;
+    .result-card {
+        padding: 24px;
+        border-radius: 12px;
+        margin-top: 16px;
+        margin-bottom: 20px;
     }
-
-    .scam-box {
-        background-color: #ffe5e5;
-        border: 2px solid #e53935;
+    .card-scam {
+        background-color: #fef2f2;
+        border: 2px solid #ef4444;
     }
-
-    .genuine-box {
-        background-color: #e8f5e9;
-        border: 2px solid #43a047;
+    .card-spam {
+        background-color: #fffbeb;
+        border: 2px solid #f59e0b;
     }
-
-    .big-result {
-        font-size: 30px;
-        font-weight: 700;
+    .card-genuine {
+        background-color: #f0fdf4;
+        border: 2px solid #22c55e;
     }
-
+    .badge {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 9999px;
+        font-size: 13px;
+        font-weight: 600;
+        margin-right: 8px;
+        margin-bottom: 6px;
+    }
+    .badge-indicator {
+        background-color: #fee2e2;
+        color: #991b1b;
+        border: 1px solid #fca5a5;
+    }
+    .badge-info {
+        background-color: #e0f2fe;
+        color: #0369a1;
+        border: 1px solid #7dd3fc;
+    }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-
 # ============================================================
-# LOAD DATASET
-# ============================================================
-
-@st.cache_data
-def load_dataset():
-
-    if not DATASET_FILE.exists():
-        return None
-
-    try:
-        return pd.read_csv(DATASET_FILE)
-    except Exception:
-        return None
-
-
-# ============================================================
-# LOAD TRAINED MODEL
+# LOAD MODEL INSTANCE
 # ============================================================
 
 @st.cache_resource
-def load_model():
-
-    if not MODEL_FILE.exists():
-        return None, None
-
-    if not VECTORIZER_FILE.exists():
-        return None, None
-
-    try:
-
-        model = joblib.load(MODEL_FILE)
-        vectorizer = joblib.load(VECTORIZER_FILE)
-
-        return model, vectorizer
-
-    except Exception:
-
-        return None, None
-
-
-# ============================================================
-# TEXT PREPROCESSING
-# ============================================================
-
-def clean_text(text):
-
-    text = str(text).lower()
-
-    # Replace URLs
-    text = re.sub(
-        r"http\S+|www\S+",
-        " URL ",
-        text
-    )
-
-    # Replace email addresses
-    text = re.sub(
-        r"\S+@\S+",
-        " EMAIL ",
-        text
-    )
-
-    # Replace numbers
-    text = re.sub(
-        r"\d+",
-        " NUMBER ",
-        text
-    )
-
-    # Remove extra spaces
-    text = re.sub(
-        r"\s+",
-        " ",
-        text
-    ).strip()
-
-    return text
-
-
-# ============================================================
-# SUSPICIOUS PATTERN DETECTION
-# ============================================================
-
-def detect_suspicious_patterns(text):
-
-    text_lower = text.lower()
-
-    patterns = []
-
-    # URL
-    if re.search(
-        r"http[s]?://|www\.",
-        text_lower
-    ):
-        patterns.append(
-            "Contains a web link"
-        )
-
-    # OTP / sensitive information
-    if re.search(
-        r"\botp\b|verification code|verify|pin|password",
-        text_lower
-    ):
-        patterns.append(
-            "Mentions sensitive verification information"
-        )
-
-    # Prize / reward
-    if re.search(
-        r"\bprize\b|\bwon\b|\bwinner\b|\blottery\b|\breward\b|cash prize",
-        text_lower
-    ):
-        patterns.append(
-            "Mentions a prize or reward"
-        )
-
-    # Urgency
-    if re.search(
-        r"\burgent\b|immediately|act now|expires|last chance",
-        text_lower
-    ):
-        patterns.append(
-            "Uses urgency or pressure"
-        )
-
-    # Money
-    if re.search(
-        r"\bpayment\b|\bpay\b|\bmoney\b|\bfee\b|\brefund\b|\baccount\b",
-        text_lower
-    ):
-        patterns.append(
-            "Mentions money or payment"
-        )
-
-    # Action request
-    if re.search(
-        r"\bclick\b|\btap\b|call now|\breply\b|\bcontact\b",
-        text_lower
-    ):
-        patterns.append(
-            "Contains an action request"
-        )
-
-    # Account problem
-    if re.search(
-        r"\bblocked\b|\bsuspended\b|\bdeactivated\b|\bclosed\b",
-        text_lower
-    ):
-        patterns.append(
-            "Claims an account or service problem"
-        )
-
-    # Phone number
-    if re.search(
-        r"(?:\+?\d[\d\s\-]{7,}\d)",
-        text
-    ):
-        patterns.append(
-            "Contains a phone number"
-        )
-
-    return patterns
-
-
-# ============================================================
-# RISK SCORE
-# ============================================================
-
-def calculate_risk_score(text, prediction):
-
-    patterns = detect_suspicious_patterns(text)
-
-    score = 0
-
-    # Model prediction contribution
-    if prediction == 1:
-        score += 30
-
-    # Suspicious pattern contribution
-    score += min(
-        len(patterns) * 10,
-        50
-    )
-
-    # URL
-    if re.search(
-        r"http[s]?://|www\.",
-        text.lower()
-    ):
-        score += 10
-
-    # Sensitive information
-    if re.search(
-        r"\botp\b|password|pin|verification code",
-        text.lower()
-    ):
-        score += 10
-
-    return min(
-        score,
-        100
-    )
-
-
-# ============================================================
-# SAFETY TIPS
-# ============================================================
-
-def get_safety_tips(prediction):
-
-    if prediction == 1:
-
-        return [
-            "Do not click suspicious links.",
-            "Do not share OTPs, passwords, PINs or banking details.",
-            "Verify the sender through an official source.",
-            "Do not make payments based only on the message.",
-            "Block or report the sender if the message is suspicious."
-        ]
-
-    return [
-        "Still verify unexpected requests independently.",
-        "Never share OTPs, passwords or PINs with anyone.",
-        "Check links carefully before opening them."
-    ]
-
-
-# ============================================================
-# SMS PREDICTION
-# ============================================================
-
-def predict_sms(message, model, vectorizer):
-
-    cleaned_message = clean_text(message)
-
-    # Convert text to TF-IDF
-    features = vectorizer.transform(
-        [cleaned_message]
-    )
-
-    # ML prediction
-    prediction = int(
-        model.predict(features)[0]
-    )
-
-    # Linear SVM decision score
-    decision_score = float(
-        model.decision_function(features)[0]
-    )
-
-    # Confidence-like score
-    #
-    # IMPORTANT:
-    # This is NOT a calibrated probability.
-    # It is derived from the SVM decision function.
-    confidence = min(
-        99,
-        max(
-            50,
-            int(
-                50 + abs(decision_score) * 10
-            )
-        )
-    )
-
-    # Current model:
-    # 0 = HAM
-    # 1 = SPAM
-
-    if prediction == 1:
-
-        label = "SCAM / SPAM"
-
-    else:
-
-        label = "GENUINE / HAM"
-
-    # Suspicious patterns
-    patterns = detect_suspicious_patterns(
-        message
-    )
-
-    # Risk score
-    risk_score = calculate_risk_score(
-        message,
-        prediction
-    )
-
-    # Explanation
-    if prediction == 1:
-
-        if patterns:
-
-            reason = (
-                "The machine-learning model classified "
-                "this message as suspicious. "
-                "The message also contains: "
-                + ", ".join(patterns)
-                + "."
-            )
-
-        else:
-
-            reason = (
-                "The machine-learning model classified "
-                "this message as suspicious."
-            )
-
-    else:
-
-        if patterns:
-
-            reason = (
-                "The machine-learning model classified "
-                "this message as HAM, although some "
-                "potentially suspicious patterns were detected: "
-                + ", ".join(patterns)
-                + "."
-            )
-
-        else:
-
-            reason = (
-                "The machine-learning model classified "
-                "this message as HAM and no strong "
-                "suspicious patterns were detected."
-            )
-
-    return {
-        "prediction": prediction,
-        "label": label,
-        "confidence": confidence,
-        "risk_score": risk_score,
-        "patterns": patterns,
-        "reason": reason
-    }
-
-
-# ============================================================
-# LOAD DATA AND MODEL
-# ============================================================
-
-df = load_dataset()
-
-model, vectorizer = load_model()
-
+def get_classifier():
+    guard = ScamGuard()
+    guard.ensure_ready()
+    return guard
+
+# Initialize session stats
+if "history" not in st.session_state:
+    st.session_state.history = []
 
 # ============================================================
 # SIDEBAR
 # ============================================================
 
-st.sidebar.title(
-    "🛡️ SMS Scam Detector"
-)
+with st.sidebar:
+    st.title("🛡️ System Guide")
+    st.markdown(
+        """
+        This system classifies incoming SMS text messages into **three distinct categories**
+        using Natural Language Processing and Machine Learning:
+        
+        * 🚨 **SCAM**
+          Phishing, credential theft, fake bank alerts, lottery fraud, suspicious URLs.
+        * 📢 **NON-SCAM SPAM**
+          Marketing promotions, commercial advertisements, unwanted offers without clear fraud.
+        * ✅ **GENUINE**
+          Legitimate personal chats, service updates, and official transactional notifications.
+        """
+    )
+    st.divider()
 
-page = st.sidebar.radio(
-    "Navigation",
-    [
-        "🏠 Dashboard",
-        "🔍 Analyze SMS",
-        "📊 Dataset",
-        "🤖 Model",
-        "ℹ️ About"
-    ]
-)
+    st.subheader("Model Information")
+    st.markdown(
+        """
+        * **Features:** TF-IDF (Unigrams & Bigrams)
+        * **Model:** Balanced Linear Classification
+        * **Evaluation Baseline:** 90.9% Logistic Regression / 87.9% Linear SVM
+        * **Explainability:** Rule-Based Threat Analysis Layer
+        """
+    )
+    st.divider()
 
+    if st.session_state.history:
+        st.subheader("Session Statistics")
+        hist_df = pd.DataFrame(st.session_state.history)
+        st.write(hist_df["class"].value_counts())
+        if st.button("Clear History"):
+            st.session_state.history.clear()
+            st.rerun()
 
 # ============================================================
-# DASHBOARD
+# MAIN APPLICATION
 # ============================================================
 
-if page == "🏠 Dashboard":
+st.markdown('<div class="main-title">🛡️ SMS Scam Detection System</div>', unsafe_allow_html=True)
+st.markdown('<div class="subtitle">Real-time NLP classification, threat indicator detection, and risk analysis for mobile text messages</div>', unsafe_allow_html=True)
 
-    st.markdown(
-        '<div class="main-title">'
-        '🛡️ SMS Scam Detection Using NLP'
-        '</div>',
-        unsafe_allow_html=True
-    )
+# Preset sample test messages
+st.write("##### Quick Test Examples (Click to load):")
+c1, c2, c3, c4, c5 = st.columns(5)
 
-    st.markdown(
-        '<div class="subtitle">'
-        'Machine Learning based SMS classification system'
-        '</div>',
-        unsafe_allow_html=True
-    )
+sample_text = ""
+if c1.button("🚨 Fake Prize"):
+    st.session_state.preset = "URGENT! You have won a £1,000 cash prize in our weekly draw! Call 09061701939 to claim code S89. Valid 12hrs only."
+if c2.button("🔑 OTP Theft"):
+    st.session_state.preset = "Dear Customer, your bank access is locked. Please share the 6-digit OTP code sent to your phone to restore your account immediately."
+if c3.button("🏦 Fake Bank KYC"):
+    st.session_state.preset = "HDFC Bank Alert: Your NetBanking account will be suspended today. Click http://hdfc-kyc-update.xyz to verify your PAN number."
+if c4.button("📢 Promo Ad"):
+    st.session_state.preset = "Great Summer Sale! Get 50% discount on all apparel at Trends this weekend only. Reply STOP to cancel."
+if c5.button("✅ Personal Chat"):
+    st.session_state.preset = "Hey, are you free for lunch today at 1pm? Let me know when you reach the cafeteria."
 
-    # Dataset statistics
-    if df is not None:
+default_input = st.session_state.get("preset", "")
 
-        total_messages = len(df)
+message_input = st.text_area(
+    "Paste SMS message text to analyze:",
+    value=default_input,
+    height=140,
+    placeholder="Type or paste an SMS message here..."
+)
 
-        if "label" in df.columns:
+col_btn, col_info = st.columns([1, 4])
+with col_btn:
+    analyze_btn = st.button("🔍 Analyze SMS", type="primary", use_container_width=True)
 
-            ham_count = len(
-                df[
-                    df["label"]
-                    .astype(str)
-                    .str.upper()
-                    .eq("HAM")
-                ]
-            )
+# ============================================================
+# PREDICTION & RESULTS
+# ============================================================
 
-            spam_count = len(
-                df[
-                    df["label"]
-                    .astype(str)
-                    .str.upper()
-                    .eq("SPAM")
-                ]
-            )
-
-        else:
-
-            ham_count = 0
-            spam_count = 0
-
+if analyze_btn:
+    if not message_input.strip():
+        st.warning("⚠️ Please enter an SMS message before clicking Analyze.")
     else:
+        try:
+            with st.spinner("Analyzing message with NLP model..."):
+                classifier = get_classifier()
+                output: ScamGuardOutput = classifier.analyze(message_input)
 
-        total_messages = 0
-        ham_count = 0
-        spam_count = 0
+            # Record history
+            st.session_state.history.append({
+                "text": message_input[:40] + "...",
+                "class": output.predicted_class,
+                "risk": output.risk_score
+            })
 
-    # Metrics
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.metric(
-            "Total Cleaned Messages",
-            total_messages
-        )
-
-    with col2:
-
-        st.metric(
-            "HAM Messages",
-            ham_count
-        )
-
-    with col3:
-
-        st.metric(
-            "SPAM Messages",
-            spam_count
-        )
-
-    st.divider()
-
-    # Pipeline
-    st.subheader(
-        "🔄 Project Pipeline"
-    )
-
-    st.markdown(
-        """
-        **SMS Message**
-
-        ↓
-
-        **Text Preprocessing**
-
-        ↓
-
-        **TF-IDF Feature Extraction**
-
-        ↓
-
-        **Linear SVM**
-
-        ↓
-
-        **Prediction**
-
-        ↓
-
-        **Risk Analysis + Explanation**
-
-        ↓
-
-        **Safety Recommendation**
-        """
-    )
-
-    st.divider()
-
-    st.info(
-        "The current trained model is a HAM/SPAM "
-        "classification baseline. Its metrics should "
-        "not be presented as final SCAM-vs-GENUINE "
-        "ground-truth performance."
-    )
-
-
-# ============================================================
-# ANALYZE SMS
-# ============================================================
-
-elif page == "🔍 Analyze SMS":
-
-    st.title(
-        "🔍 Analyze an SMS"
-    )
-
-    st.write(
-        "Enter an SMS message below and the trained "
-        "machine-learning model will classify it."
-    )
-
-    message = st.text_area(
-        "Enter SMS message",
-        height=180,
-        placeholder=(
-            "Example: Congratulations! "
-            "You have won a prize. "
-            "Click the link to claim..."
-        )
-    )
-
-    analyze_button = st.button(
-        "🔎 Analyze SMS",
-        type="primary",
-        use_container_width=True
-    )
-
-    if analyze_button:
-
-        if not message.strip():
-
-            st.warning(
-                "Please enter an SMS message."
-            )
-
-        elif model is None or vectorizer is None:
-
-            st.error(
-                "Trained model files were not found."
-            )
-
-            st.code(
-                "python scripts\\train_models.py"
-            )
-
-        else:
-
-            result = predict_sms(
-                message,
-                model,
-                vectorizer
-            )
+            # Determine card style
+            if output.predicted_class == "SCAM":
+                card_class = "card-scam"
+                icon = "🚨"
+            elif output.predicted_class == "NON-SCAM SPAM":
+                card_class = "card-spam"
+                icon = "📢"
+            else:
+                card_class = "card-genuine"
+                icon = "✅"
 
             st.divider()
 
-            # ------------------------------------------------
-            # RESULT
-            # ------------------------------------------------
-
-            if result["prediction"] == 1:
-
-                st.markdown(
-                    f"""
-                    <div class="result-box scam-box">
-                        <div class="big-result">
-                            🚨 {result["label"]}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-            else:
-
-                st.markdown(
-                    f"""
-                    <div class="result-box genuine-box">
-                        <div class="big-result">
-                            ✅ {result["label"]}
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-
-            st.write("")
-
-            # Metrics
-            col1, col2 = st.columns(2)
-
-            with col1:
-
-                st.metric(
-                    "Model Confidence",
-                    f"{result['confidence']}%"
-                )
-
-            with col2:
-
-                st.metric(
-                    "Risk Score",
-                    f"{result['risk_score']}/100"
-                )
-
-            # Explanation
-            st.subheader(
-                "🧠 Why was it classified this way?"
+            # Main Result Banner
+            st.markdown(
+                f"""
+                <div class="result-card {card_class}">
+                    <h2 style="margin: 0; color: {output.class_color};">{icon} Classified as: {output.predicted_class}</h2>
+                    <p style="margin-top: 8px; font-size: 15px; color: #334155;">{output.class_description}</p>
+                </div>
+                """,
+                unsafe_allow_html=True
             )
 
-            st.write(
-                result["reason"]
-            )
-
-            # Patterns
-            if result["patterns"]:
-
-                st.subheader(
-                    "⚠️ Detected Patterns"
-                )
-
-                for pattern in result["patterns"]:
-
-                    st.write(
-                        f"• {pattern}"
-                    )
-
-            else:
-
-                st.success(
-                    "No strong suspicious patterns were detected."
-                )
-
-            # Safety
-            st.subheader(
-                "🛡️ Safety Recommendations"
-            )
-
-            tips = get_safety_tips(
-                result["prediction"]
-            )
-
-            for tip in tips:
-
-                st.write(
-                    f"• {tip}"
-                )
-
-            # Message
-            st.subheader(
-                "📩 Message Analyzed"
-            )
-
-            st.code(
-                message,
-                language=None
-            )
-
-            st.caption(
-                "Note: The displayed confidence is a "
-                "confidence-like score derived from the "
-                "Linear SVM decision function. It is not "
-                "a calibrated probability."
-            )
-
-
-# ============================================================
-# DATASET PAGE
-# ============================================================
-
-elif page == "📊 Dataset":
-
-    st.title(
-        "📊 Dataset"
-    )
-
-    if df is None:
-
-        st.error(
-            "Dataset file was not found."
-        )
-
-    else:
-
-        st.write(
-            f"Total cleaned records: **{len(df)}**"
-        )
-
-        st.dataframe(
-            df.head(100),
-            use_container_width=True,
-            hide_index=True
-        )
-
-        st.subheader(
-            "📈 Class Distribution"
-        )
-
-        if "label" in df.columns:
-
-            counts = (
-                df["label"]
-                .value_counts()
-            )
-
-            st.bar_chart(
-                counts
-            )
-
-        st.warning(
-            "The current dataset uses HAM/SPAM labels. "
-            "HAM/SPAM should not automatically be interpreted "
-            "as SCAM/GENUINE."
-        )
-
-        st.markdown(
-            """
-            **Current cleaned dataset:**
-
-            - Total: **5,158**
-            - HAM: **4,516**
-            - SPAM: **642**
-            """
-        )
-
-
-# ============================================================
-# MODEL PAGE
-# ============================================================
-
-elif page == "🤖 Model":
-
-    st.title(
-        "🤖 Machine Learning Model"
-    )
-
-    st.write(
-        "Four machine-learning models were trained and "
-        "evaluated using the current HAM/SPAM SMS dataset."
-    )
-
-    # --------------------------------------------------------
-    # PIPELINE
-    # --------------------------------------------------------
-
-    st.subheader(
-        "🔄 Machine Learning Pipeline"
-    )
-
-    st.code(
-        """
-SMS Message
-     ↓
-Text Preprocessing
-     ↓
-TF-IDF Feature Extraction
-     ↓
-Machine Learning Model
-     ↓
-Prediction
-     ↓
-Risk Analysis + Explanation
-        """
-    )
-
-    # --------------------------------------------------------
-    # MODEL COMPARISON
-    # --------------------------------------------------------
-
-    st.subheader(
-        "📊 Model Comparison"
-    )
-
-    results_data = {
-        "Model": [
-            "Naive Bayes",
-            "Logistic Regression",
-            "Linear SVM",
-            "Random Forest"
-        ],
-
-        "Accuracy": [
-            95.54,
-            97.77,
-            98.35,
-            97.00
-        ],
-
-        "Precision": [
-            100.00,
-            88.32,
-            93.70,
-            100.00
-        ],
-
-        "Recall": [
-            64.06,
-            94.53,
-            92.97,
-            75.78
-        ],
-
-        "F1 Score": [
-            78.10,
-            91.32,
-            93.33,
-            86.22
-        ]
-    }
-
-    results_df = pd.DataFrame(
-        results_data
-    )
-
-    display_df = results_df.copy()
-
-    for column in [
-        "Accuracy",
-        "Precision",
-        "Recall",
-        "F1 Score"
-    ]:
-
-        display_df[column] = (
-            display_df[column]
-            .map(
-                lambda x: f"{x:.2f}%"
-            )
-        )
-
-    st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-    # --------------------------------------------------------
-    # PERFORMANCE CHART
-    # --------------------------------------------------------
-
-    st.subheader(
-        "📈 Model Performance"
-    )
-
-    chart_df = results_df.set_index(
-        "Model"
-    )
-
-    st.bar_chart(
-        chart_df[
-            [
-                "Accuracy",
-                "Precision",
-                "Recall",
-                "F1 Score"
-            ]
-        ]
-    )
-
-    # --------------------------------------------------------
-    # SELECTED MODEL
-    # --------------------------------------------------------
-
-    st.subheader(
-        "🏆 Selected Model"
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.metric(
-            "Model",
-            "Linear SVM"
-        )
-
-    with col2:
-
-        st.metric(
-            "Accuracy",
-            "98.35%"
-        )
-
-    with col3:
-
-        st.metric(
-            "F1 Score",
-            "93.33%"
-        )
-
-    st.success(
-        "Linear SVM was selected as the primary model "
-        "because it achieved the best F1-score among "
-        "the four evaluated models on the current "
-        "HAM/SPAM baseline."
-    )
-
-    # --------------------------------------------------------
-    # CONFUSION MATRIX
-    # --------------------------------------------------------
-
-    st.subheader(
-        "🔢 Linear SVM Confusion Matrix"
-    )
-
-    st.write(
-        "Results from the held-out test set."
-    )
-
-    confusion_matrix = pd.DataFrame(
-        [
-            [896, 8],
-            [9, 119]
-        ],
-        index=[
-            "Actual HAM",
-            "Actual SPAM"
-        ],
-        columns=[
-            "Predicted HAM",
-            "Predicted SPAM"
-        ]
-    )
-
-    st.dataframe(
-        confusion_matrix,
-        use_container_width=True
-    )
-
-    # --------------------------------------------------------
-    # CONFUSION MATRIX EXPLANATION
-    # --------------------------------------------------------
-
-    st.markdown(
-        """
-        **Interpretation:**
-
-        - **896** → HAM correctly classified as HAM
-        - **8** → HAM incorrectly classified as SPAM
-        - **9** → SPAM incorrectly classified as HAM
-        - **119** → SPAM correctly classified as SPAM
-        """
-    )
-
-    # --------------------------------------------------------
-    # DATASET INFORMATION
-    # --------------------------------------------------------
-
-    st.subheader(
-        "📁 Training Dataset"
-    )
-
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-
-        st.metric(
-            "Total Messages",
-            "5,158"
-        )
-
-    with col2:
-
-        st.metric(
-            "HAM",
-            "4,516"
-        )
-
-    with col3:
-
-        st.metric(
-            "SPAM",
-            "642"
-        )
-
-    # --------------------------------------------------------
-    # TF-IDF
-    # --------------------------------------------------------
-
-    st.subheader(
-        "🔤 TF-IDF Feature Extraction"
-    )
-
-    st.write(
-        "TF-IDF converts SMS text into numerical features "
-        "that can be processed by the machine-learning model."
-    )
-
-    st.markdown(
-        """
-        **Configuration:**
-
-        - N-gram range: **1–2**
-        - Maximum features: **15,000**
-        - Sublinear TF: **Enabled**
-        - Features: **Unigrams + Bigrams**
-        """
-    )
-
-    # --------------------------------------------------------
-    # SVM CONFIGURATION
-    # --------------------------------------------------------
-
-    st.subheader(
-        "⚙️ Linear SVM Configuration"
-    )
-
-    st.code(
-        """
-TF-IDF
-ngram_range = (1, 2)
-max_features = 15000
-sublinear_tf = True
-
-Linear SVM
-Training/Test Split = 80/20
-Random State = 42
-        """
-    )
-
-    # --------------------------------------------------------
-    # RESEARCH NOTE
-    # --------------------------------------------------------
-
-    st.warning(
-        "Research note: These metrics represent the current "
-        "HAM/SPAM baseline dataset. They should not be "
-        "presented as final SCAM-vs-GENUINE ground-truth "
-        "performance."
-    )
-
-    st.info(
-        "The next research step is to validate scam-specific "
-        "labels using manually reviewed SMS messages before "
-        "reporting final scam-detection performance."
-    )
-
-
-# ============================================================
-# ABOUT PAGE
-# ============================================================
-
-elif page == "ℹ️ About":
-
-    st.title(
-        "ℹ️ About the Project"
-    )
-
-    st.markdown(
-        """
-        ## SMS Scam Detection Using NLP and Machine Learning
-
-        This project analyzes SMS messages using Natural Language
-        Processing and Machine Learning techniques.
-
-        ### Technologies Used
-
-        - Python
-        - Streamlit
-        - Scikit-learn
-        - TF-IDF
-        - Linear SVM
-        - Pandas
-        - Joblib
-
-        ### Main Objective
-
-        The system analyzes an SMS message and provides:
-
-        - Machine-learning classification
-        - Confidence-like score
-        - Risk score
-        - Suspicious pattern detection
-        - Explanation
-        - Safety recommendations
-
-        ### Machine Learning Pipeline
-
-        SMS → Text Preprocessing → TF-IDF → Linear SVM → Prediction
-
-        ### Important Research Note
-
-        The current trained baseline uses HAM/SPAM labels.
-
-        Therefore, the current model metrics should be described
-        as a HAM/SPAM classification baseline and not as final
-        SCAM-vs-GENUINE ground-truth accuracy.
-
-        A manually validated scam-specific dataset is required
-        before claiming final scam-detection performance.
-        """
-    )
+            # Metric Columns
+            m1, m2, m3, m4 = st.columns(4)
+            m1.metric("Predicted Category", output.predicted_class)
+            m2.metric("Model Confidence", f"{output.confidence_pct}%")
+            m3.metric("Scam Risk Score", f"{output.risk_score} / 100")
+            m4.metric("Threat Level", output.risk_level)
+
+            st.divider()
+
+            # Threat Indicators & Explainability Section
+            left_col, right_col = st.columns(2)
+
+            with left_col:
+                st.subheader("🔍 Analysis & Threat Indicators")
+                st.write(f"**Explanation:** {output.explanation}")
+
+                if output.detected_indicators:
+                    st.write("**Specific Threat Triggers Detected:**")
+                    for ind in output.detected_indicators:
+                        st.markdown(f'<span class="badge badge-indicator">⚠️ {ind}</span>', unsafe_allow_html=True)
+                else:
+                    st.success("No explicit high-risk scam keywords or threat patterns found.")
+
+                st.write("**Message Attributes:**")
+                attr_badges = []
+                if output.has_url:
+                    attr_badges.append("🌐 Contains Link/URL")
+                if output.has_phone:
+                    attr_badges.append("📞 Contains Phone Number")
+                if output.has_currency:
+                    attr_badges.append("💰 Mentions Money/Currency")
+                if not attr_badges:
+                    attr_badges.append("📝 Plain text message")
+
+                for b in attr_badges:
+                    st.markdown(f'<span class="badge badge-info">{b}</span>', unsafe_allow_html=True)
+
+            with right_col:
+                st.subheader("💡 Safety Recommendations")
+                for tip in output.tips:
+                    st.write(tip)
+
+                st.caption("Disclaimer: This tool assists in cybersecurity awareness and does not replace human judgment. Never share confidential credentials.")
+
+        except Exception as err:
+            st.error(f"Error during analysis: {err}")
+
+# Footer
+st.divider()
+st.caption("SMS Scam Detection Using Natural Language Processing and Machine Learning | BCA Final Project")

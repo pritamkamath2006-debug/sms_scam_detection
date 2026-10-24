@@ -5,7 +5,7 @@ from pathlib import Path
 # PATHS
 # ============================================================
 
-BASE_DIR = Path(r"D:\Ai based OTP scam detection")
+BASE_DIR = Path(__file__).resolve().parent
 
 INPUT_FILE = BASE_DIR / "dataset" / "manual_labels.csv"
 

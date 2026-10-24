@@ -1,402 +1,250 @@
-import os
+"""
+train_models.py
+===============
+Reproducible 3-class model training and comparative evaluation pipeline.
+Compares:
+  - Multinomial Naive Bayes
+  - Logistic Regression
+  - Linear SVM
+  - Random Forest
+
+Evaluates on a held-out test split with:
+  - Accuracy
+  - Per-class Precision, Recall, F1
+  - Macro-F1
+  - Confusion Matrix
+Saves best model and vectorizer to scamguard/artifacts/.
+"""
+
 import sys
+import os
 import json
+from pathlib import Path
 import joblib
 import numpy as np
 import pandas as pd
 
-from pathlib import Path
-
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
-
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.linear_model import LogisticRegression
 from sklearn.svm import LinearSVC
 from sklearn.ensemble import RandomForestClassifier
-
 from sklearn.metrics import (
     accuracy_score,
     precision_score,
     recall_score,
     f1_score,
+    classification_report,
     confusion_matrix,
-    classification_report
 )
 
+# Allow importing scamguard
+SCRIPT_DIR = Path(__file__).resolve().parent
+PROJECT_ROOT = SCRIPT_DIR.parents[0]  # PhishShield-main
+REPO_ROOT = SCRIPT_DIR.parents[1]     # sms_scam_detection
 
-# ============================================================
-# PATHS
-# ============================================================
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-BASE_DIR = Path(__file__).resolve().parents[1]
+from scamguard.preprocessing import clean_text
 
-DATASET_PATH = (
-    BASE_DIR.parent
-    / "dataset"
-    / "sms_scam_cleaned.csv"
-)
-
-ARTIFACT_DIR = BASE_DIR / "scamguard" / "artifacts"
-ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-
+DATASET_PATH = REPO_ROOT / "dataset" / "reviewed_dataset.csv"
+ARTIFACT_DIR = PROJECT_ROOT / "scamguard" / "artifacts"
 RESULTS_PATH = ARTIFACT_DIR / "model_results.json"
-
-
-# ============================================================
-# SETTINGS
-# ============================================================
-
-RANDOM_STATE = 42
-TEST_SIZE = 0.20
-
-MAX_FEATURES = 15000
-NGRAM_RANGE = (1, 2)
-
-
-# ============================================================
-# LOAD DATASET
-# ============================================================
-
-print("=" * 70)
-print("SMS SCAM DETECTION - MODEL TRAINING")
-print("=" * 70)
-
-print("\n[1] Loading dataset...")
-print(f"Dataset: {DATASET_PATH}")
-
-if not DATASET_PATH.exists():
-    print("\nERROR: Dataset file not found!")
-    print(f"Expected path:\n{DATASET_PATH}")
-    sys.exit(1)
-
-df = pd.read_csv(DATASET_PATH)
-
-print(f"Rows loaded: {len(df)}")
-print(f"Columns: {list(df.columns)}")
-
-
-# ============================================================
-# CHECK REQUIRED COLUMNS
-# ============================================================
-
-if "text" not in df.columns or "label" not in df.columns:
-    print("\nERROR: Dataset must contain:")
-    print("  text")
-    print("  label")
-    print("\nAvailable columns:")
-    print(df.columns.tolist())
-    sys.exit(1)
-
-
-# ============================================================
-# CLEAN DATA
-# ============================================================
-
-print("\n[2] Cleaning data...")
-
-df = df[["text", "label"]].copy()
-
-df["text"] = df["text"].fillna("").astype(str).str.strip()
-df["label"] = df["label"].astype(str).str.strip().str.upper()
-
-df = df[df["text"] != ""]
-
-df = df.drop_duplicates(subset=["text"])
-
-print(f"Rows after cleaning: {len(df)}")
-
-print("\nClass distribution:")
-print(df["label"].value_counts())
-
-
-# ============================================================
-# LABEL ENCODING
-# ============================================================
-
-print("\n[3] Preparing labels...")
-
-# UCI dataset:
-# HAM  -> 0
-# SPAM -> 1
-
-label_map = {
-    "HAM": 0,
-    "SPAM": 1
-}
-
-unknown_labels = set(df["label"]) - set(label_map.keys())
-
-if unknown_labels:
-    print("\nERROR: Unknown labels found:")
-    print(unknown_labels)
-    sys.exit(1)
-
-df["target"] = df["label"].map(label_map)
-
-
-# ============================================================
-# TRAIN / TEST SPLIT
-# ============================================================
-
-print("\n[4] Splitting dataset...")
-
-X = df["text"]
-y = df["target"]
-
-X_train, X_test, y_train, y_test = train_test_split(
-    X,
-    y,
-    test_size=TEST_SIZE,
-    random_state=RANDOM_STATE,
-    stratify=y
-)
-
-print(f"Training samples: {len(X_train)}")
-print(f"Testing samples : {len(X_test)}")
-
-
-# ============================================================
-# TF-IDF
-# ============================================================
-
-print("\n[5] Creating TF-IDF features...")
-
-vectorizer = TfidfVectorizer(
-    lowercase=True,
-    strip_accents="unicode",
-    ngram_range=NGRAM_RANGE,
-    max_features=MAX_FEATURES,
-    sublinear_tf=True
-)
-
-X_train_tfidf = vectorizer.fit_transform(X_train)
-X_test_tfidf = vectorizer.transform(X_test)
-
-print(f"TF-IDF training shape: {X_train_tfidf.shape}")
-print(f"TF-IDF testing shape : {X_test_tfidf.shape}")
-
-
-# ============================================================
-# MODELS
-# ============================================================
-
-models = {
-
-    "Naive Bayes": MultinomialNB(),
-
-    "Logistic Regression": LogisticRegression(
-        max_iter=3000,
-        class_weight="balanced",
-        random_state=RANDOM_STATE
-    ),
-
-    "Linear SVM": LinearSVC(
-        class_weight="balanced",
-        random_state=RANDOM_STATE
-    ),
-
-    "Random Forest": RandomForestClassifier(
-        n_estimators=200,
-        max_depth=None,
-        min_samples_split=2,
-        class_weight="balanced",
-        random_state=RANDOM_STATE,
-        n_jobs=-1
-    )
-}
-
-
-# ============================================================
-# TRAIN + EVALUATE
-# ============================================================
-
-results = {}
-
-best_model_name = None
-best_model = None
-best_f1 = -1
-
-
-print("\n[6] Training models...")
-print("=" * 70)
-
-
-for model_name, model in models.items():
-
-    print(f"\nTraining: {model_name}")
-
-    # Train
-    model.fit(X_train_tfidf, y_train)
-
-    # Predictions
-    y_pred = model.predict(X_test_tfidf)
-
-    # Metrics
-    accuracy = accuracy_score(y_test, y_pred)
-
-    precision = precision_score(
-        y_test,
-        y_pred,
-        zero_division=0
-    )
-
-    recall = recall_score(
-        y_test,
-        y_pred,
-        zero_division=0
-    )
-
-    f1 = f1_score(
-        y_test,
-        y_pred,
-        zero_division=0
-    )
-
-    cm = confusion_matrix(y_test, y_pred)
-
-    # Store results
-    results[model_name] = {
-        "accuracy": float(accuracy),
-        "precision": float(precision),
-        "recall": float(recall),
-        "f1_score": float(f1),
-        "confusion_matrix": cm.tolist()
-    }
-
-    # Print
-    print(f"Accuracy : {accuracy:.4f}")
-    print(f"Precision: {precision:.4f}")
-    print(f"Recall   : {recall:.4f}")
-    print(f"F1 Score : {f1:.4f}")
-
-    print("\nConfusion Matrix:")
-    print(cm)
-
-    print("\nClassification Report:")
-    print(
-        classification_report(
-            y_test,
-            y_pred,
-            target_names=["HAM", "SPAM"],
-            zero_division=0
-        )
-    )
-
-    # Select best model using F1
-    if f1 > best_f1:
-        best_f1 = f1
-        best_model_name = model_name
-        best_model = model
-
-
-# ============================================================
-# SAVE BEST MODEL
-# ============================================================
-
-print("\n" + "=" * 70)
-print("[7] Saving best model...")
-print("=" * 70)
-
-print(f"Best model: {best_model_name}")
-print(f"Best F1   : {best_f1:.4f}")
-
-
 MODEL_PATH = ARTIFACT_DIR / "best_model.joblib"
 VECTORIZER_PATH = ARTIFACT_DIR / "tfidf_vectorizer.joblib"
 
-joblib.dump(best_model, MODEL_PATH)
-joblib.dump(vectorizer, VECTORIZER_PATH)
+RANDOM_STATE = 42
+TEST_SIZE = 0.20
+CLASSES = ["GENUINE", "NON-SCAM SPAM", "SCAM"]
 
 
-# ============================================================
-# SAVE MODEL INFORMATION
-# ============================================================
+def load_dataset():
+    if not DATASET_PATH.exists():
+        fallback = REPO_ROOT / "dataset" / "manual_labels_reviewed.csv"
+        if fallback.exists():
+            print(f"[Notice] Using fallback dataset: {fallback}")
+            df = pd.read_csv(fallback)
+        else:
+            raise FileNotFoundError(f"Dataset not found at {DATASET_PATH}")
+    else:
+        df = pd.read_csv(DATASET_PATH)
 
-model_info = {
-    "best_model": best_model_name,
-    "best_f1_score": float(best_f1),
+    label_col = "manual_label" if "manual_label" in df.columns else "label"
+    df["text"] = df["text"].fillna("").astype(str).str.strip()
+    df["label"] = df[label_col].astype(str).str.strip().str.upper()
 
-    "dataset": {
-        "file": str(DATASET_PATH),
-        "total_rows": int(len(df)),
-        "training_rows": int(len(X_train)),
-        "testing_rows": int(len(X_test))
-    },
+    df = df[df["text"] != ""].copy()
+    df = df[df["label"].isin(CLASSES)].copy()
+    df = df.drop_duplicates(subset=["text"]).reset_index(drop=True)
 
-    "label_mapping": {
-        "HAM": 0,
-        "SPAM": 1
-    },
-
-    "tfidf": {
-        "ngram_range": list(NGRAM_RANGE),
-        "max_features": MAX_FEATURES,
-        "sublinear_tf": True
-    },
-
-    "random_state": RANDOM_STATE,
-
-    "models": results
-}
+    print(f"Loaded {len(df)} validated messages.")
+    print("Class distribution:\n", df["label"].value_counts().to_string())
+    return df
 
 
-with open(RESULTS_PATH, "w", encoding="utf-8") as f:
-    json.dump(model_info, f, indent=4)
+def main():
+    print("=" * 70)
+    print("SMS 3-CLASS SCAM DETECTION - MODEL TRAINING & COMPARISON")
+    print("=" * 70)
 
+    ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
+    df = load_dataset()
 
-# ============================================================
-# FINAL SUMMARY
-# ============================================================
+    # Preprocessing
+    print("\n[1] Applying text preprocessing...")
+    df["cleaned_text"] = [clean_text(t) for t in df["text"]]
 
-print("\n" + "=" * 70)
-print("MODEL COMPARISON")
-print("=" * 70)
-
-comparison_rows = []
-
-for name, result in results.items():
-
-    comparison_rows.append({
-        "Model": name,
-        "Accuracy": result["accuracy"],
-        "Precision": result["precision"],
-        "Recall": result["recall"],
-        "F1 Score": result["f1_score"]
-    })
-
-comparison_df = pd.DataFrame(comparison_rows)
-
-comparison_df = comparison_df.sort_values(
-    by="F1 Score",
-    ascending=False
-)
-
-print(
-    comparison_df.to_string(
-        index=False,
-        float_format=lambda x: f"{x:.4f}"
+    # Stratified Split
+    print(f"\n[2] Splitting into 80% train / 20% test (Stratified, random_state={RANDOM_STATE})...")
+    X_train_raw, X_test_raw, y_train, y_test = train_test_split(
+        df["cleaned_text"],
+        df["label"],
+        test_size=TEST_SIZE,
+        random_state=RANDOM_STATE,
+        stratify=df["label"],
     )
-)
+
+    print(f"  Training samples : {len(X_train_raw)}")
+    print(f"  Testing samples  : {len(X_test_raw)}")
+
+    # Feature extraction (fit ONLY on training data to avoid data leakage)
+    print("\n[3] Fitting TF-IDF Vectorizer on training data...")
+    vectorizer = TfidfVectorizer(
+        ngram_range=(1, 2),
+        max_features=10000,
+        sublinear_tf=True,
+        lowercase=True,
+        strip_accents="unicode",
+    )
+    X_train_tfidf = vectorizer.fit_transform(X_train_raw)
+    X_test_tfidf = vectorizer.transform(X_test_raw)
+
+    print(f"  Vocabulary size: {X_train_tfidf.shape[1]}")
+
+    # Model definitions
+    candidate_models = {
+        "Multinomial Naive Bayes": MultinomialNB(),
+        "Logistic Regression": LogisticRegression(
+            class_weight="balanced",
+            max_iter=1000,
+            random_state=RANDOM_STATE,
+        ),
+        "Linear SVM": LinearSVC(
+            class_weight="balanced",
+            random_state=RANDOM_STATE,
+        ),
+        "Random Forest": RandomForestClassifier(
+            n_estimators=100,
+            class_weight="balanced",
+            random_state=RANDOM_STATE,
+        ),
+    }
+
+    results = {}
+    best_model_name = None
+    best_macro_f1 = -1.0
+    best_scam_recall = -1.0
+    best_fitted_model = None
+
+    print("\n[4] Training and evaluating candidate models...\n")
+
+    for name, model in candidate_models.items():
+        print("-" * 70)
+        print(f"Training: {name}")
+        print("-" * 70)
+
+        model.fit(X_train_tfidf, y_train)
+        y_pred = model.predict(X_test_tfidf)
+
+        acc = float(accuracy_score(y_test, y_pred))
+        macro_f1 = float(f1_score(y_test, y_pred, average="macro", zero_division=0))
+
+        # Per-class metrics
+        p_per, r_per, f_per, _ = classification_report(
+            y_test,
+            y_pred,
+            labels=CLASSES,
+            output_dict=True,
+            zero_division=0,
+        ), None, None, None
+
+        report_dict = classification_report(
+            y_test,
+            y_pred,
+            labels=CLASSES,
+            output_dict=True,
+            zero_division=0,
+        )
+
+        cm = confusion_matrix(y_test, y_pred, labels=CLASSES).tolist()
+
+        scam_recall = report_dict["SCAM"]["recall"]
+        scam_f1 = report_dict["SCAM"]["f1-score"]
+
+        results[name] = {
+            "accuracy": acc,
+            "macro_f1": macro_f1,
+            "scam_recall": float(scam_recall),
+            "scam_f1": float(scam_f1),
+            "classification_report": report_dict,
+            "confusion_matrix": cm,
+            "labels": CLASSES,
+        }
+
+        print(f"Accuracy : {acc:.4f} ({acc * 100:.2f}%)")
+        print(f"Macro-F1 : {macro_f1:.4f}")
+        print(f"SCAM Recall: {scam_recall:.4f} | SCAM F1: {scam_f1:.4f}")
+        print("\nClassification Report:")
+        print(classification_report(y_test, y_pred, labels=CLASSES, zero_division=0))
+        print("Confusion Matrix (Rows=Actual, Columns=Predicted):")
+        print(f"Classes: {CLASSES}")
+        for r_idx, row in enumerate(cm):
+            print(f"  {CLASSES[r_idx]:15}: {row}")
+        print()
+
+        # Selection criterion: Highest macro-F1 and SCAM recall
+        # We prioritize SCAM recall to minimize dangerous false negatives
+        if (macro_f1 > best_macro_f1) or (macro_f1 == best_macro_f1 and scam_recall > best_scam_recall):
+            best_macro_f1 = macro_f1
+            best_scam_recall = scam_recall
+            best_model_name = name
+            best_fitted_model = model
+
+    print("=" * 70)
+    print(f"BEST MODEL SELECTED: {best_model_name}")
+    print(f"Best Macro-F1      : {best_macro_f1:.4f}")
+    print(f"Best SCAM Recall   : {best_scam_recall:.4f}")
+    print("=" * 70)
+
+    # Save artifacts
+    print(f"\n[5] Saving model artifacts...")
+    joblib.dump(best_fitted_model, MODEL_PATH)
+    joblib.dump(vectorizer, VECTORIZER_PATH)
+    print(f"  Saved model to      : {MODEL_PATH}")
+    print(f"  Saved vectorizer to : {VECTORIZER_PATH}")
+
+    # Save evaluation summary
+    output_summary = {
+        "best_model": best_model_name,
+        "best_macro_f1": best_macro_f1,
+        "dataset_info": {
+            "path": str(DATASET_PATH.relative_to(REPO_ROOT)),
+            "total_samples": len(df),
+            "train_samples": len(X_train_raw),
+            "test_samples": len(X_test_raw),
+            "classes": CLASSES,
+        },
+        "models": results,
+    }
+
+    with open(RESULTS_PATH, "w", encoding="utf-8") as fp:
+        json.dump(output_summary, fp, indent=4)
+    print(f"  Saved results to    : {RESULTS_PATH}")
+
+    print("\nTraining and evaluation completed successfully!")
 
 
-print("\n" + "=" * 70)
-print("TRAINING COMPLETED")
-print("=" * 70)
-
-print(f"\nBest model       : {best_model_name}")
-print(f"Best F1 Score    : {best_f1:.4f}")
-
-print(f"\nSaved model:")
-print(MODEL_PATH)
-
-print(f"\nSaved TF-IDF:")
-print(VECTORIZER_PATH)
-
-print(f"\nSaved results:")
-print(RESULTS_PATH)
-
-print("\nNOTE:")
-print("This model is trained on the UCI HAM/SPAM dataset.")
-print("Therefore, these metrics represent a SPAM classification baseline,")
-print("not a final SCAM-vs-GENUINE ground-truth evaluation.")
+if __name__ == "__main__":
+    main()

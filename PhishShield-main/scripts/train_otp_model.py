@@ -96,7 +96,7 @@ def main() -> int:
     parser.add_argument(
         "--data",
         type=Path,
-        default=Path(r"D:\Ai based OTP scam detection\dataset\otp_scam_dataset.csv"),
+        default=PROJECT_ROOT.parent / "dataset" / "otp_scam_dataset.csv",
         help="Derived CSV containing text_transcript and label columns.",
     )
     parser.add_argument("--test-size", type=float, default=0.20)

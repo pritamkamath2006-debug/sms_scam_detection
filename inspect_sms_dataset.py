@@ -1,12 +1,15 @@
-import pandas as pd
 import os
+from pathlib import Path
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent
 
 
 # ============================================================
 # DATASET PATH
 # ============================================================
 
-DATASET_PATH = r"D:\Ai based OTP scam detection\dataset\SMSSpamCollection"
+DATASET_PATH = BASE_DIR / "dataset" / "SMSSpamCollection"
 
 
 print("=" * 70)
@@ -18,7 +21,7 @@ print("=" * 70)
 # 1. CHECK FILE
 # ============================================================
 
-if not os.path.exists(DATASET_PATH):
+if not Path(DATASET_PATH).exists():
     print("\nERROR: Dataset file not found!")
     print(DATASET_PATH)
     exit()

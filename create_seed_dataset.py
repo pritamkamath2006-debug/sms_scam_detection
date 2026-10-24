@@ -2,14 +2,12 @@ import pandas as pd
 from pathlib import Path
 
 # Original project dataset
-SOURCE = Path(
-    r"D:\Ai based OTP scam detection\PhishShield-main\data\sample_messages.csv"
-)
+BASE_DIR = Path(__file__).resolve().parent
+SOURCE = BASE_DIR / "PhishShield-main" / "data" / "sample_messages.csv"
 
 # New clean dataset
-OUTPUT = Path(
-    r"D:\Ai based OTP scam detection\dataset\otp_scam_seed_dataset.csv"
-)
+BASE_DIR = Path(__file__).resolve().parent
+OUTPUT = BASE_DIR / "dataset" / "otp_scam_seed_dataset.csv"
 
 # Load dataset
 df = pd.read_csv(SOURCE)

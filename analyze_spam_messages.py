@@ -1,7 +1,10 @@
+from pathlib import Path
 import pandas as pd
 
+BASE_DIR = Path(__file__).resolve().parent
+
 # Cleaned dataset
-INPUT_PATH = r"D:\Ai based OTP scam detection\dataset\sms_scam_cleaned.csv"
+INPUT_PATH = BASE_DIR / "dataset" / "sms_scam_cleaned.csv"
 
 print("=" * 70)
 print("SPAM MESSAGE ANALYSIS")

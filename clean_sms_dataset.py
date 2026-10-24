@@ -1,15 +1,18 @@
-import pandas as pd
 import os
+from pathlib import Path
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # ============================================================
 # SMS DATASET CLEANING
 # ============================================================
 
 # Original dataset
-INPUT_PATH = r"D:\Ai based OTP scam detection\dataset\SMSSpamCollection"
+INPUT_PATH = BASE_DIR / "dataset" / "SMSSpamCollection"
 
 # New cleaned dataset
-OUTPUT_PATH = r"D:\Ai based OTP scam detection\dataset\sms_scam_cleaned.csv"
+OUTPUT_PATH = BASE_DIR / "dataset" / "sms_scam_cleaned.csv"
 
 
 print("=" * 70)
@@ -21,7 +24,7 @@ print("=" * 70)
 # 1. CHECK FILE
 # ============================================================
 
-if not os.path.exists(INPUT_PATH):
+if not Path(INPUT_PATH).exists():
     print("ERROR: Dataset file not found!")
     print(INPUT_PATH)
     exit()

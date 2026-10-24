@@ -1,17 +1,34 @@
-from __future__ import annotations
+"""
+scamguard/config.py
+===================
+Configuration for 3-class SMS Scam Detection system.
+Defines supported classes, severity weights, and scam indicators.
+"""
 
+from __future__ import annotations
 from dataclasses import dataclass
 
+# The 3 primary target classes
+CLASSES: list[str] = ["GENUINE", "NON-SCAM SPAM", "SCAM"]
 
-CLASSES: list[str] = ["Safe", "Phishing", "OTP Scam", "Lottery Scam", "Job Scam"]
-
-
+# Severity weights used for calculating risk scores (0 to 100)
 SEVERITY_BY_CLASS: dict[str, int] = {
-    "Safe": 0,
-    "Phishing": 90,
-    "OTP Scam": 85,
-    "Lottery Scam": 75,
-    "Job Scam": 70,
+    "GENUINE": 5,
+    "NON-SCAM SPAM": 35,
+    "SCAM": 85,
+}
+
+# Color palette for frontend presentation
+CLASS_COLORS: dict[str, str] = {
+    "GENUINE": "#2e7d32",        # Green
+    "NON-SCAM SPAM": "#ed6c02",  # Amber / Orange
+    "SCAM": "#d32f2f",           # Red
+}
+
+CLASS_DESCRIPTIONS: dict[str, str] = {
+    "GENUINE": "Legitimate personal, transactional, or informational communication.",
+    "NON-SCAM SPAM": "Unwanted advertisement, promotional marketing, or subscription pitch without clear fraud.",
+    "SCAM": "Deceptive or fraudulent message attempting phishing, fake prize claims, OTP/credential theft, or money extortion.",
 }
 
 
@@ -21,112 +38,67 @@ class PatternSet:
     phrases: set[str]
 
 
-PATTERNS_BY_CLASS: dict[str, PatternSet] = {
-    "Phishing": PatternSet(
-        keywords={
-            "verify",
-            "verification",
-            "login",
-            "password",
-            "account",
-            "bank",
-            "suspend",
-            "locked",
-            "security",
-            "urgent",
-            "click",
-            "link",
-            "reset",
-            "update",
-        },
-        phrases={
-            "confirm your account",
-            "unusual activity",
-            "update your details",
-            "reset your password",
-            "account will be closed",
-            "click the link",
-        },
-    ),
-    "OTP Scam": PatternSet(
-        keywords={
-            "otp",
-            "code",
-            "verification code",
-            "one time",
-            "authenticate",
-            "2fa",
-            "2-factor",
-            "expires",
-            "do not share",
-        },
-        phrases={
-            "share the code",
-            "send me the otp",
-            "verify this code",
-            "your code is",
-            "expires in",
-        },
-    ),
-    "Lottery Scam": PatternSet(
-        keywords={
-            "winner",
-            "won",
-            "prize",
-            "lottery",
-            "jackpot",
-            "claim",
-            "free",
-            "congratulations",
-            "gift",
-            "reward",
-        },
-        phrases={
-            "you have won",
-            "claim your prize",
-            "congratulations you are selected",
-            "limited time offer",
-        },
-    ),
-    "Job Scam": PatternSet(
-        keywords={
-            "job",
-            "hiring",
-            "recruiter",
-            "interview",
-            "work from home",
-            "remote",
-            "salary",
-            "pay",
-            "training fee",
-            "deposit",
-            "telegram",
-            "whatsapp",
-        },
-        phrases={
-            "pay to start",
-            "send your resume",
-            "contact our hr",
-            "work from home",
-            "no experience required",
-        },
-    ),
+# Keyword and phrase patterns for risk analysis
+SCAM_INDICATORS: dict[str, list[str]] = {
+    "otp_password": [
+        r"\botp\b",
+        r"\bone\s*time\s*password\b",
+        r"\bverification\s*code\b",
+        r"\bsecurity\s*code\b",
+        r"\bpin(?:\s*code)?\b",
+        r"\bpasscode\b",
+        r"\bpassword\b",
+        r"\bsecret\s*code\b",
+    ],
+    "account_urgency": [
+        r"\bsuspend(?:ed|ing)?\b",
+        r"\bblock(?:ed|ing)?\b",
+        r"\block(?:ed|ing)?\b",
+        r"\bdeactivat(?:ed|ing)?\b",
+        r"\baction\s+required\b",
+        r"\bexpire(?:d|s)?\b",
+        r"\blast\s+chance\b",
+        r"\burgent(?:ly)?\b",
+        r"\bkyc\b",
+        r"\bpan\s*card\b",
+        r"\bunusual\s+activity\b",
+    ],
+    "payment_money": [
+        r"\bpay(?:ment)?\b",
+        r"\bfee\b",
+        r"\btransfer\b",
+        r"\brefund\b",
+        r"\bcash\b",
+        r"\bmoney\b",
+        r"\bbill\s*due\b",
+        r"\bwire\s*transfer\b",
+        r"\bamount\s+due\b",
+    ],
+    "fake_prize": [
+        r"\bwon\b",
+        r"\bwinner\b",
+        r"\bprize\b",
+        r"\blottery\b",
+        r"\bclaim\b",
+        r"\bjackpot\b",
+        r"\breward\b",
+        r"\bcongratulations\b",
+        r"\bselected\s+to\s+receive\b",
+    ],
+    "suspicious_link": [
+        r"https?://\S+",
+        r"www\.\S+",
+        r"bit\.ly/\S+",
+        r"tinyurl\.com/\S+",
+        r"\.(?:xyz|top|info|tk|biz|online|site|ru|cc)\b",
+    ],
+    "confidential_data": [
+        r"\bcard\s*number\b",
+        r"\bcvv\b",
+        r"\bcredential(?:s)?\b",
+        r"\baadhaar\b",
+        r"\bbank\s*details\b",
+        r"\blogin\b",
+        r"\bnetbanking\b",
+    ],
 }
-
-
-GLOBAL_SUSPICIOUS_KEYWORDS: set[str] = {
-    "urgent",
-    "immediately",
-    "asap",
-    "limited",
-    "today",
-    "act now",
-    "click",
-    "link",
-    "tap",
-    "verify",
-    "confirm",
-    "gift",
-    "reward",
-}
-

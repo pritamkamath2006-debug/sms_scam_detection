@@ -1,12 +1,15 @@
-import pandas as pd
+from pathlib import Path
 import re
+import pandas as pd
+
+BASE_DIR = Path(__file__).resolve().parent
 
 # ============================================================
 # SETTINGS
 # ============================================================
 
-INPUT_PATH = r"D:\Ai based OTP scam detection\dataset\sms_scam_cleaned.csv"
-OUTPUT_PATH = r"D:\Ai based OTP scam detection\dataset\sms_scam_categorized.csv"
+INPUT_PATH = BASE_DIR / "dataset" / "sms_scam_cleaned.csv"
+OUTPUT_PATH = BASE_DIR / "dataset" / "sms_scam_categorized.csv"
 
 
 # ============================================================
