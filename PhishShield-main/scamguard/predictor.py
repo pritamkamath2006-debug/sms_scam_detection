@@ -4,9 +4,12 @@ scamguard/predictor.py
 Main inference orchestrator for 3-class SMS Scam Detection.
 Integrates text preprocessing, TF-IDF vectorization, model scoring,
 rule-based risk indicators, and safety recommendations.
+Distinguishes between non-fraudulent commercial marketing (NON-SCAM SPAM)
+and fraudulent deception (SCAM).
 """
 
 from __future__ import annotations
+import re
 from dataclasses import dataclass
 from pathlib import Path
 import numpy as np
@@ -40,6 +43,89 @@ class ScamGuardOutput:
     tips: list[str]
 
 
+# Marketing promotional keywords (indicate NON-SCAM SPAM, NOT scam)
+PROMO_PATTERNS = [
+    r"\bdiscount\b",
+    r"\bsale\b",
+    r"\boff\b",
+    r"\bdeal\b",
+    r"\bshop\b",
+    r"\bcoupon\b",
+    r"\bcollection\b",
+    r"\bstore\b",
+    r"\bflat\s+\d+%\b",
+    r"\bup\s+to\s+\d+%\s+off\b",
+    r"\bsubscription\b",
+    r"\bcallertune\b",
+    r"\bringtone\b",
+    r"\bmobile\s+plan\b",
+    r"\brecharge\b",
+    r"\bcashback\b",
+    r"\bhandset\b",
+    r"\bbrand\b",
+    r"\bopt\s*out\b",
+    r"\breply\s+stop\b",
+]
+
+# Explicit fraud indicators that must be present for a SCAM classification
+CRITICAL_FRAUD_PATTERNS = [
+    r"\botp\b",
+    r"\bone\s*time\s*password\b",
+    r"\bverification\s*code\b",
+    r"\bcvv\b",
+    r"\bpin(?:\s*code)?\b",
+    r"\bpasscode\b",
+    r"\bpassword\b",
+    r"\bkyc\s+(?:expired|pending|update)\b",
+    r"\baccount\s+(?:blocked|suspended|deactivated|locked)\b",
+    r"\bnetbanking\b",
+    r"\bcard\s+blocked\b",
+    r"\bpan\s*card\s+blocked\b",
+    r"\b(?:won|winner)\s+(?:a\s+)?(?:lottery|jackpot|cash\s+prize)\b",
+    r"\bclaim\s+code\b",
+    r"\b0906\d{6,}\b",   # Known UK premium rate fraud prefixes
+    r"\b0871\d{6,}\b",
+    # Composite fraud: account threat + action link
+    r"\b(?:suspended|blocked|deactivated|locked)\b.{0,60}(?:click|visit|update|verify|login|http)",
+    r"\b(?:kyc|pan\s*card)\b.{0,60}(?:click|visit|update|verify|login|http)",
+    # Phishing pretexts
+    r"\bclick\s+here\s+to\s+(?:verify|update|restore|activate|reactivate|unblock)\b",
+    r"\bvisit\s+(?:http|www\.)\b",
+    r"\bshare\s+(?:your\s+)?(?:otp|card|account|password|pin|cvv|details)\b",
+    r"\bdo\s+not\s+share\b.{0,30}\botp\b",  # "do not share your OTP" = OTP context, still SCAM
+]
+
+# Patterns that strongly indicate genuine personal or transactional messages
+# If these match AND raw model says SCAM AND no critical fraud patterns exist -> override to GENUINE
+GENUINE_OVERRIDE_PATTERNS = [
+    # Delivery / logistics confirmations (brief)
+    r"\bdelivered\b.{0,30}\b(?:door|address|home|flat|building|porch|doorstep|post\s*box|parcel\s*locker)\b",
+    r"\bpackage\b.{0,30}\bdelivered\b",
+    r"\border\b.{0,30}\b(?:shipped|dispatched|out\s+for\s+delivery|delivered|picked\s+up)\b",
+    r"\byour\s+(?:parcel|shipment|courier)\b.{0,30}\bdeliver\b",
+    # Short personal "call me" messages — common in genuine conversations
+    # Catches: "Call me now", "please call me back", "call me later", "call you later" etc.
+    r"\bcall\s+(?:me|you|him|her|us|back|later|now|soon)\b",
+    # Uber / Swiggy / food-app arrival
+    r"\b(?:uber|ola|rapido|swiggy|zomato|blinkit|dunzo)\b.{0,50}\b(?:arriving|arrived|on\s+the\s+way|delivered|picked\s+up)\b",
+]
+
+# Patterns that indicate promotional / commercial spam (NON-SCAM SPAM)
+# Applied even when raw model says GENUINE — to catch promotional messages model confuses with genuine
+PROMO_RECLASSIFY_PATTERNS = [
+    r"\b(?:discount|sale|off|deal|offer)\b.{0,40}\b(?:shop|store|buy|order|visit|available|only|limited)\b",
+    r"\b(?:mega|bumper|grand|biggest|huge|exclusive)\s+(?:sale|offer|discount|deal)\b",
+    r"\b(?:50|40|30|60|70|80)\s*%\s*(?:off|discount)\b",
+    r"\bflat\s+\d+%\s+off\b",
+    r"\breply\s+stop\b",
+    r"\bopt\s*out\b",
+    r"\bsms\s+to\s+stop\b",
+    r"\bfashion\s+sale\b",
+    r"\bweekend\s+(?:sale|offer|deal)\b",
+    r"\b(?:shop|buy)\s+now\b.{0,30}\b(?:discount|sale|off|deal|offer)\b",
+]
+
+
 class ScamGuard:
     def __init__(self, artifacts_dir: str | Path | None = None) -> None:
         if artifacts_dir is None:
@@ -56,7 +142,7 @@ class ScamGuard:
     def ensure_ready(self) -> None:
         """
         Loads the trained model and vectorizer.
-        If missing, trains a baseline LinearSVC model on reviewed_dataset.csv.
+        If missing, trains a baseline model on reviewed_dataset.csv.
         """
         self.artifacts_dir.mkdir(parents=True, exist_ok=True)
 
@@ -71,7 +157,6 @@ class ScamGuard:
             except Exception as e:
                 print(f"Error loading existing artifacts: {e}. Will rebuild...")
 
-        # Fallback: Train automatically on reviewed dataset
         self._train_and_save_fallback()
 
     def _train_and_save_fallback(self) -> None:
@@ -91,11 +176,11 @@ class ScamGuard:
         clean_texts = [clean_text(t) for t in df["text"].astype(str)]
         labels = df[label_col].astype(str).str.strip().tolist()
 
-        vectorizer = build_vectorizer(max_features=10000)
+        vectorizer = build_vectorizer(max_features=5000)
         X = vectorizer.fit_transform(clean_texts)
 
-        from sklearn.svm import LinearSVC
-        model = LinearSVC(class_weight="balanced", random_state=42)
+        from sklearn.linear_model import LogisticRegression
+        model = LogisticRegression(class_weight="balanced", max_iter=1000, random_state=42)
         model.fit(X, labels)
 
         joblib.dump(model, self.model_path)
@@ -138,28 +223,30 @@ class ScamGuard:
         indicators_info = analyze_risk_indicators(raw_message)
         detected_inds = indicators_info["detected_indicators"]
 
-        # Fraud heuristic check:
-        # If the statistical model was trained on historical data lacking modern scam patterns,
-        # detect high-risk combinations:
-        # 1. Direct OTP / Password request
-        # 2. Account block/urgency + web link
-        # 3. Fake prize claims with call/claim action
-        has_otp_threat = any("otp" in ind.lower() for ind in detected_inds)
-        has_urgency = any("urgency" in ind.lower() or "suspension" in ind.lower() for ind in detected_inds)
-        has_prize = any("prize" in ind.lower() or "lottery" in ind.lower() for ind in detected_inds)
-        has_url = indicators_info["has_url"]
+        # Fraud check vs Promo check vs Genuine override:
+        has_critical_fraud = any(bool(re.search(pat, cleaned, re.IGNORECASE)) for pat in CRITICAL_FRAUD_PATTERNS)
+        has_promo = any(bool(re.search(pat, cleaned, re.IGNORECASE)) for pat in PROMO_PATTERNS)
+        has_genuine_signal = any(bool(re.search(pat, cleaned, re.IGNORECASE)) for pat in GENUINE_OVERRIDE_PATTERNS)
 
         predicted_class = raw_model_class
 
-        if has_otp_threat:
-            predicted_class = "SCAM"
-            confidence = max(confidence, 0.85)
-        elif has_urgency and has_url:
-            predicted_class = "SCAM"
-            confidence = max(confidence, 0.90)
-        elif has_prize and (has_urgency or indicators_info["has_phone"] or has_url):
+        # Refinement logic (priority order):
+        # 1. Critical fraud signals override everything → SCAM
+        if has_critical_fraud:
             predicted_class = "SCAM"
             confidence = max(confidence, 0.88)
+        # 2. Model said SCAM but text is a known-genuine delivery/logistics/personal message
+        #    with no fraud signals → correct back to GENUINE
+        elif raw_model_class == "SCAM" and has_genuine_signal and not has_critical_fraud:
+            predicted_class = "GENUINE"
+            confidence = 0.72
+        # 3. Model said SCAM but message contains commercial promo patterns and no fraud
+        elif raw_model_class == "SCAM" and has_promo and not has_critical_fraud:
+            predicted_class = "NON-SCAM SPAM"
+            confidence = 0.75
+        # 4. If raw model class is GENUINE and no fraud patterns: trust model
+        elif raw_model_class == "GENUINE" and not has_critical_fraud:
+            predicted_class = "GENUINE"
 
         confidence_pct = int(confidence * 100)
 

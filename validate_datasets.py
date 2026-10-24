@@ -56,13 +56,11 @@ def create_consolidated_reviewed_dataset():
                 })
 
     df = pd.DataFrame(records)
-    # Deduplicate by text, keeping first (reviewed)
     df = df.drop_duplicates(subset=["text"]).reset_index(drop=True)
     df["message_id"] = range(1, len(df) + 1)
     df = df[["message_id", "text", "original_label", "manual_label", "source"]]
 
     df.to_csv(output_path, index=False, encoding="utf-8")
-    print(f"[OK] Consolidated reviewed dataset saved to: {output_path} ({len(df)} rows)")
     return df
 
 
@@ -74,43 +72,50 @@ def validate_all_datasets():
     print("DATASET VALIDATION AUDIT")
     print("=" * 70)
 
-    # 1. Consolidated reviewed dataset
-    reviewed_df = create_consolidated_reviewed_dataset()
-    print("\n--- Consolidated Reviewed Dataset (Gold Standard) ---")
-    print(f"Total Rows: {len(reviewed_df)}")
-    print(f"Missing Texts: {reviewed_df['text'].isna().sum()}")
-    print(f"Duplicate Texts: {reviewed_df['text'].duplicated().sum()}")
-    print("Class Distribution:")
-    print(reviewed_df["manual_label"].value_counts())
+    # 1. Full 3-Class Production Dataset (5,158 messages)
+    full_path = DATASET_DIR / "sms_scam_full_3class.csv"
+    if full_path.exists():
+        df_full = pd.read_csv(full_path)
+        print("\n--- Full 3-Class Dataset (sms_scam_full_3class.csv) ---")
+        print(f"Total Messages  : {len(df_full)}")
+        print(f"Missing Texts   : {df_full['text'].isna().sum()}")
+        print(f"Duplicate Texts : {df_full['text'].duplicated().sum()}")
+        print("Class Distribution:")
+        print(df_full["label"].value_counts().to_string())
+        print("Sources:")
+        print(df_full["source"].value_counts().to_string())
 
-    # 2. Candidate pool
+    # 2. Consolidated reviewed dataset (165 messages)
+    reviewed_df = create_consolidated_reviewed_dataset()
+    print("\n--- Verified Human-Reviewed Dataset (reviewed_dataset.csv) ---")
+    print(f"Total Rows      : {len(reviewed_df)}")
+    print(f"Missing Texts   : {reviewed_df['text'].isna().sum()}")
+    print(f"Duplicate Texts : {reviewed_df['text'].duplicated().sum()}")
+    print("Class Distribution:")
+    print(reviewed_df["manual_label"].value_counts().to_string())
+
+    # 3. Candidate pool
     pool_path = DATASET_DIR / "scam_training_pool.csv"
     if pool_path.exists():
         df_pool = pd.read_csv(pool_path)
         print("\n--- Candidate Review Pool (scam_training_pool.csv) ---")
-        print(f"Total Candidate Messages: {len(df_pool)}")
-        print(f"Missing Texts: {df_pool['text'].isna().sum()}")
-        print(f"Duplicate Texts: {df_pool['text'].duplicated().sum()}")
+        print(f"Total Candidate Messages : {len(df_pool)}")
+        print(f"Missing Texts            : {df_pool['text'].isna().sum()}")
+        print(f"Duplicate Texts          : {df_pool['text'].duplicated().sum()}")
 
-        reviewed_texts = set(reviewed_df["text"].str.strip().str.lower())
-        pool_texts = set(df_pool["text"].str.strip().str.lower())
-        already_done = len(reviewed_texts.intersection(pool_texts))
-        print(f"Candidates already reviewed: {already_done}")
-        print(f"Candidates remaining for review: {len(df_pool) - already_done}")
-
-    # 3. Cleaned UCI dataset
+    # 4. Cleaned UCI dataset
     clean_path = DATASET_DIR / "sms_scam_cleaned.csv"
     if clean_path.exists():
         df_clean = pd.read_csv(clean_path)
         print("\n--- Cleaned UCI SMS Dataset (sms_scam_cleaned.csv) ---")
-        print(f"Total Cleaned Messages: {len(df_clean)}")
-        print(f"Missing Texts: {df_clean['text'].isna().sum()}")
-        print(f"Duplicate Texts: {df_clean['text'].duplicated().sum()}")
+        print(f"Total Messages  : {len(df_clean)}")
+        print(f"Missing Texts   : {df_clean['text'].isna().sum()}")
+        print(f"Duplicate Texts : {df_clean['text'].duplicated().sum()}")
         print("Original Distribution:")
-        print(df_clean["label"].value_counts())
+        print(df_clean["label"].value_counts().to_string())
 
     print("\n" + "=" * 70)
-    print("DATASET VALIDATION COMPLETED")
+    print("DATASET VALIDATION COMPLETED [OK]")
     print("=" * 70)
 
 

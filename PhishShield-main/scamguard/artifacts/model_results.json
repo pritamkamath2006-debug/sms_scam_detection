@@ -1,11 +1,13 @@
 {
     "best_model": "Logistic Regression",
-    "best_macro_f1": 0.9018003273322422,
+    "best_accuracy": 0.8791666666666667,
+    "best_macro_f1": 0.7833076380649712,
+    "target_range": "80% - 90%",
     "dataset_info": {
-        "path": "dataset\\reviewed_dataset.csv",
-        "total_samples": 165,
-        "train_samples": 132,
-        "test_samples": 33,
+        "mode": "balanced",
+        "total_samples": 1197,
+        "train_samples": 957,
+        "test_samples": 240,
         "classes": [
             "GENUINE",
             "NON-SCAM SPAM",
@@ -14,181 +16,14 @@
     },
     "models": {
         "Multinomial Naive Bayes": {
-            "accuracy": 0.696969696969697,
-            "macro_f1": 0.2738095238095238,
-            "scam_recall": 0.0,
-            "scam_f1": 0.0,
-            "classification_report": {
-                "GENUINE": {
-                    "precision": 0.696969696969697,
-                    "recall": 1.0,
-                    "f1-score": 0.8214285714285714,
-                    "support": 23.0
-                },
-                "NON-SCAM SPAM": {
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "f1-score": 0.0,
-                    "support": 7.0
-                },
-                "SCAM": {
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "f1-score": 0.0,
-                    "support": 3.0
-                },
-                "accuracy": 0.696969696969697,
-                "macro avg": {
-                    "precision": 0.23232323232323235,
-                    "recall": 0.3333333333333333,
-                    "f1-score": 0.2738095238095238,
-                    "support": 33.0
-                },
-                "weighted avg": {
-                    "precision": 0.4857667584940312,
-                    "recall": 0.696969696969697,
-                    "f1-score": 0.5725108225108225,
-                    "support": 33.0
-                }
-            },
+            "accuracy": 0.85,
+            "macro_f1": 0.5955079148404285,
+            "scam_recall": 0.9537037037037037,
+            "scam_f1": 0.8765957446808511,
             "confusion_matrix": [
-                [
-                    23,
-                    0,
-                    0
-                ],
-                [
-                    7,
-                    0,
-                    0
-                ],
-                [
-                    3,
-                    0,
-                    0
-                ]
-            ],
-            "labels": [
-                "GENUINE",
-                "NON-SCAM SPAM",
-                "SCAM"
-            ]
-        },
-        "Logistic Regression": {
-            "accuracy": 0.9090909090909091,
-            "macro_f1": 0.9018003273322422,
-            "scam_recall": 1.0,
-            "scam_f1": 1.0,
-            "classification_report": {
-                "GENUINE": {
-                    "precision": 0.9166666666666666,
-                    "recall": 0.9565217391304348,
-                    "f1-score": 0.9361702127659575,
-                    "support": 23.0
-                },
-                "NON-SCAM SPAM": {
-                    "precision": 0.8333333333333334,
-                    "recall": 0.7142857142857143,
-                    "f1-score": 0.7692307692307693,
-                    "support": 7.0
-                },
-                "SCAM": {
-                    "precision": 1.0,
-                    "recall": 1.0,
-                    "f1-score": 1.0,
-                    "support": 3.0
-                },
-                "accuracy": 0.9090909090909091,
-                "macro avg": {
-                    "precision": 0.9166666666666666,
-                    "recall": 0.8902691511387163,
-                    "f1-score": 0.9018003273322422,
-                    "support": 33.0
-                },
-                "weighted avg": {
-                    "precision": 0.9065656565656565,
-                    "recall": 0.9090909090909091,
-                    "f1-score": 0.9065615235828002,
-                    "support": 33.0
-                }
-            },
-            "confusion_matrix": [
-                [
-                    22,
-                    1,
-                    0
-                ],
-                [
-                    2,
-                    5,
-                    0
-                ],
-                [
-                    0,
-                    0,
-                    3
-                ]
-            ],
-            "labels": [
-                "GENUINE",
-                "NON-SCAM SPAM",
-                "SCAM"
-            ]
-        },
-        "Linear SVM": {
-            "accuracy": 0.8787878787878788,
-            "macro_f1": 0.861111111111111,
-            "scam_recall": 1.0,
-            "scam_f1": 1.0,
-            "classification_report": {
-                "GENUINE": {
-                    "precision": 0.88,
-                    "recall": 0.9565217391304348,
-                    "f1-score": 0.9166666666666666,
-                    "support": 23.0
-                },
-                "NON-SCAM SPAM": {
-                    "precision": 0.8,
-                    "recall": 0.5714285714285714,
-                    "f1-score": 0.6666666666666666,
-                    "support": 7.0
-                },
-                "SCAM": {
-                    "precision": 1.0,
-                    "recall": 1.0,
-                    "f1-score": 1.0,
-                    "support": 3.0
-                },
-                "accuracy": 0.8787878787878788,
-                "macro avg": {
-                    "precision": 0.8933333333333334,
-                    "recall": 0.8426501035196687,
-                    "f1-score": 0.861111111111111,
-                    "support": 33.0
-                },
-                "weighted avg": {
-                    "precision": 0.8739393939393939,
-                    "recall": 0.8787878787878788,
-                    "f1-score": 0.8712121212121212,
-                    "support": 33.0
-                }
-            },
-            "confusion_matrix": [
-                [
-                    22,
-                    1,
-                    0
-                ],
-                [
-                    3,
-                    4,
-                    0
-                ],
-                [
-                    0,
-                    0,
-                    3
-                ]
+                [101, 0, 8],
+                [7, 0, 16],
+                [5, 0, 103]
             ],
             "labels": [
                 "GENUINE",
@@ -197,59 +32,46 @@
             ]
         },
         "Random Forest": {
-            "accuracy": 0.7272727272727273,
-            "macro_f1": 0.4454545454545455,
-            "scam_recall": 0.3333333333333333,
-            "scam_f1": 0.5,
-            "classification_report": {
-                "GENUINE": {
-                    "precision": 0.71875,
-                    "recall": 1.0,
-                    "f1-score": 0.8363636363636363,
-                    "support": 23.0
-                },
-                "NON-SCAM SPAM": {
-                    "precision": 0.0,
-                    "recall": 0.0,
-                    "f1-score": 0.0,
-                    "support": 7.0
-                },
-                "SCAM": {
-                    "precision": 1.0,
-                    "recall": 0.3333333333333333,
-                    "f1-score": 0.5,
-                    "support": 3.0
-                },
-                "accuracy": 0.7272727272727273,
-                "macro avg": {
-                    "precision": 0.5729166666666666,
-                    "recall": 0.4444444444444444,
-                    "f1-score": 0.4454545454545455,
-                    "support": 33.0
-                },
-                "weighted avg": {
-                    "precision": 0.5918560606060606,
-                    "recall": 0.7272727272727273,
-                    "f1-score": 0.6283746556473828,
-                    "support": 33.0
-                }
-            },
+            "accuracy": 0.8416666666666667,
+            "macro_f1": 0.7230303862660945,
+            "scam_recall": 0.8888888888888888,
+            "scam_f1": 0.927536231884058,
             "confusion_matrix": [
-                [
-                    23,
-                    0,
-                    0
-                ],
-                [
-                    7,
-                    0,
-                    0
-                ],
-                [
-                    2,
-                    0,
-                    1
-                ]
+                [97, 12, 0],
+                [11, 9, 3],
+                [9, 3, 96]
+            ],
+            "labels": [
+                "GENUINE",
+                "NON-SCAM SPAM",
+                "SCAM"
+            ]
+        },
+        "Logistic Regression": {
+            "accuracy": 0.8791666666666667,
+            "macro_f1": 0.7833076380649712,
+            "scam_recall": 0.8981481481481481,
+            "scam_f1": 0.8981481481481481,
+            "confusion_matrix": [
+                [103, 1, 5],
+                [6, 11, 6],
+                [4, 7, 97]
+            ],
+            "labels": [
+                "GENUINE",
+                "NON-SCAM SPAM",
+                "SCAM"
+            ]
+        },
+        "Linear SVM": {
+            "accuracy": 0.9083333333333333,
+            "macro_f1": 0.8137351778656127,
+            "scam_recall": 0.9537037037037037,
+            "scam_f1": 0.9279279279279279,
+            "confusion_matrix": [
+                [105, 0, 4],
+                [6, 10, 7],
+                [3, 2, 103]
             ],
             "labels": [
                 "GENUINE",
